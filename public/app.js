@@ -7,10 +7,10 @@ const AppState = {
     socket: null,
     isConnected: false,
     messages: [],
-    processedMessageIds: new Set() // Track processed message IDs to prevent duplicates
+    processedMessageIds: new Set()
 };
 
-// Sample encrypted messages (encrypted with "demoSecret")
+
 const SAMPLE_MESSAGES = [
     {
         sender: "Alice",
