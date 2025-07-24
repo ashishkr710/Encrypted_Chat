@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Encrypted Chat</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+
+<body>
+    <div id="app">
+        <!-- User Setup Dialog -->
+        <div id="userSetupDialog" class="modal">
+            <div class="modal-content">
+                <h2>Welcome to Encrypted Chat</h2>
+                <form id="userSetupForm">
+                    <div class="form-group">
+                        <label for="displayName">Display Name</label>
+                        <input type="text" id="displayName" class="form-control" required minlength="2" maxlength="20">
+                        <div class="error-message" id="displayNameError"></div>
+                    </div>
+                    <button type="submit" class="btn btn--primary btn--full-width">Continue</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Secret Key Dialog -->
+        <div id="keyDialog" class="modal hidden">
+            <div class="modal-content">
+                <h2>Enter Secret Key</h2>
+                <p>Enter your AES secret key to decrypt messages. Use "demoSecret" to see sample messages.</p>
+                <form id="keyForm">
+                    <div class="form-group">
+                        <label for="secretKey">Secret Key</label>
+                        <input type="password" id="secretKey" class="form-control" required>
+                        <div class="error-message" id="secretKeyError"></div>
+                    </div>
+                    <div class="form-buttons">
+                        <button type="button" id="skipKeyBtn" class="btn btn--secondary">Skip</button>
+                        <button type="submit" class="btn btn--primary">Set Key</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Main Chat Interface -->
+        <div id="chatInterface" class="chat-container hidden">
+            <!-- Header -->
+            <div class="chat-header">
+                <div class="chat-title">
+                    <h3>Encrypted Group Chat</h3>
+                    <div class="connection-status" id="connectionStatus">
+                        <span class="status-dot"></span>
+                        <span id="statusText">Connecting...</span>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <button id="changeKeyBtn" class="btn btn--outline btn--sm">
+                        <span class="material-icons">vpn_key</span>
+                        Key
+                    </button>
+                    <button id="logoutBtn" class="btn btn--outline btn--sm">
+                        <span class="material-icons">logout</span>
+                        Logout
+                    </button>
+                </div>
+            </div>
+
+            <!-- Messages Container -->
+            <div class="messages-container" id="messagesContainer">
+                <div class="messages-list" id="messagesList">
+                    <!-- Messages will be rendered here -->
+                </div>
+            </div>
+
+            <!-- Message Input -->
+            <div class="message-input-container">
+                <div class="message-input-wrapper">
+                    <textarea id="messageInput" class="message-input"
+                        placeholder="Type a message... (Shift+Enter for new line, Enter to send)" rows="1"
+                        maxlength="1000"></textarea>
+                    <button id="sendBtn" class="send-button" disabled>
+                        <span class="material-icons">send</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Key Status Bar -->
+        <div id="keyStatusBar" class="key-status-bar hidden">
+            <div class="key-status-content">
+                <span class="material-icons">lock</span>
+                <span id="keyStatusText">No decryption key set - messages will appear encrypted</span>
+                <button id="setKeyBtn" class="btn btn--sm btn--primary">Set Key</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- External Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
