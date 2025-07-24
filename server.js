@@ -46,9 +46,21 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 4000;
+const HOST = process.env.HOST || '0.0.0.0';
 
-server.listen(PORT, () => {
-    console.log(`Chat server running on port ${PORT}`);
+server.listen(PORT, HOST, () => {
+    console.log(`Chat server running on ${HOST}:${PORT}`);
+
+    // Log network interfaces for easy access from other devices
+    const networkInterfaces = require('os').networkInterfaces();
+    console.log('Available network addresses:');
+    Object.keys(networkInterfaces).forEach(interfaceName => {
+        networkInterfaces[interfaceName].forEach(interface => {
+            if (interface.family === 'IPv4' && !interface.internal) {
+                console.log(`  http://${interface.address}:${PORT}`);
+            }
+        });
+    });
 });
 
 // Export for Vercel

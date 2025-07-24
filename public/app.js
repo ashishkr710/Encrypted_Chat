@@ -84,12 +84,14 @@ const SocketManager = {
     connect() {
         try {
             if (typeof io !== 'undefined') {
-                // Use current host with API path for Vercel
                 const socketUrl = `${window.location.protocol}//${window.location.host}`;
                 console.log('Connecting to:', socketUrl);
 
-                AppState.socket = io(socketUrl, {
-                    path: '/api/socket',
+                // Detect if we're on Vercel or local development
+                const isVercel = window.location.hostname.includes('vercel.app') ||
+                    window.location.hostname.includes('vercel.com');
+
+                const socketOptions = {
                     timeout: 10000,
                     transports: ['websocket', 'polling'],
                     upgrade: true,
@@ -100,7 +102,15 @@ const SocketManager = {
                     reconnection: true,
                     reconnectionAttempts: 5,
                     reconnectionDelay: 1000
-                });
+                };
+
+                // Only add custom path for Vercel deployment
+                if (isVercel) {
+                    socketOptions.path = '/api/socket';
+                }
+
+                console.log('Socket options:', socketOptions);
+                AppState.socket = io(socketUrl, socketOptions);
 
                 AppState.socket.on('connect', () => {
                     console.log('Connected to server');
@@ -160,6 +170,15 @@ const SocketManager = {
     },
 
     sendViaHTTP(message) {
+        // Check if we're on Vercel (where API routes exist) or local development
+        const isVercel = window.location.hostname.includes('vercel.app') ||
+            window.location.hostname.includes('vercel.com');
+
+        if (!isVercel) {
+            console.log('HTTP fallback not available in local development');
+            return;
+        }
+
         fetch('/api/messages', {
             method: 'POST',
             headers: {
