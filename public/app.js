@@ -84,13 +84,22 @@ const SocketManager = {
     connect() {
         try {
             if (typeof io !== 'undefined') {
-                // Use current host instead of hardcoded localhost
+                // Use current host with API path for Vercel
                 const socketUrl = `${window.location.protocol}//${window.location.host}`;
                 console.log('Connecting to:', socketUrl);
 
                 AppState.socket = io(socketUrl, {
-                    timeout: 5000,
-                    transports: ['websocket', 'polling']
+                    path: '/api/socket',
+                    timeout: 10000,
+                    transports: ['websocket', 'polling'],
+                    upgrade: true,
+                    rememberUpgrade: true,
+                    pingTimeout: 60000,
+                    pingInterval: 25000,
+                    forceNew: false,
+                    reconnection: true,
+                    reconnectionAttempts: 5,
+                    reconnectionDelay: 1000
                 });
 
                 AppState.socket.on('connect', () => {
@@ -106,9 +115,15 @@ const SocketManager = {
                 });
 
                 AppState.socket.on('connect_error', (error) => {
-                    console.log('Connection failed, using demo mode');
+                    console.log('Connection error:', error);
                     AppState.isConnected = false;
                     UI.updateConnectionStatus('demo', 'Demo Mode');
+                });
+
+                AppState.socket.on('reconnect', () => {
+                    console.log('Reconnected to server');
+                    AppState.isConnected = true;
+                    UI.updateConnectionStatus('connected', 'Reconnected');
                 });
 
                 AppState.socket.on('message', (data) => {
@@ -124,7 +139,7 @@ const SocketManager = {
                         console.log('Connection timeout, switching to demo mode');
                         UI.updateConnectionStatus('demo', 'Demo Mode');
                     }
-                }, 5000);
+                }, 10000);
             } else {
                 throw new Error('Socket.IO not available');
             }
@@ -139,9 +154,26 @@ const SocketManager = {
         if (AppState.socket && AppState.isConnected) {
             AppState.socket.emit('message', message);
         } else {
-            // Demo mode - don't echo back our own messages
-            console.log('Demo mode: Message sent but not echoed back');
+            // Try HTTP fallback if available
+            this.sendViaHTTP(message);
         }
+    },
+
+    sendViaHTTP(message) {
+        fetch('/api/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ message })
+        })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Message sent via HTTP:', data);
+            })
+            .catch(error => {
+                console.log('HTTP fallback failed, using demo mode:', error);
+            });
     }
 };
 

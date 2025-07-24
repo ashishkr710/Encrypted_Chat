@@ -5,11 +5,18 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
+
+// Configure Socket.IO with better settings for Vercel
 const io = socketIo(server, {
     cors: {
         origin: "*",
-        methods: ["GET", "POST"]
-    }
+        methods: ["GET", "POST"],
+        credentials: true
+    },
+    transports: ['websocket', 'polling'],
+    allowEIO3: true,
+    pingTimeout: 60000,
+    pingInterval: 25000
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -17,6 +24,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Handle root route
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 io.on('connection', (socket) => {

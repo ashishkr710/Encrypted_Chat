@@ -2,17 +2,42 @@
     "version": 2,
     "builds": [
         {
+            "src": "api/socket.js",
+            "use": "@vercel/node"
+        },
+        {
             "src": "server.js",
             "use": "@vercel/node"
+        },
+        {
+            "src": "public/**",
+            "use": "@vercel/static"
         }
     ],
     "routes": [
         {
+            "src": "/api/socket",
+            "dest": "/api/socket.js"
+        },
+        {
+            "src": "/socket.io/(.*)",
+            "dest": "/api/socket.js"
+        },
+        {
+            "src": "/(.*\\.(js|css|html|png|jpg|jpeg|gif|svg|ico))",
+            "dest": "/public/$1"
+        },
+        {
             "src": "/(.*)",
-            "dest": "/server.js"
+            "dest": "/public/index.html"
         }
     ],
-    "env": {
-        "NODE_ENV": "production"
+    "functions": {
+        "api/socket.js": {
+            "maxDuration": 10
+        },
+        "server.js": {
+            "maxDuration": 10
+        }
     }
 }
