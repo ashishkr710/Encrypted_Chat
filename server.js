@@ -26,13 +26,8 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
 io.on('connection', (socket) => {
-    console.log('User connected:', socket.id);
+    console.log('User connected:', socket.id, 'at', new Date().toISOString());
 
     socket.on('message', (data) => {
         console.log('Message received from', socket.id, '- Sender:', data.sender, '- Message ID:', data.id);

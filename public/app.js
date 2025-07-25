@@ -10,25 +10,6 @@ const AppState = {
     processedMessageIds: new Set()
 };
 
-
-const SAMPLE_MESSAGES = [
-    {
-        sender: "Alice",
-        cipher: "U2FsdGVkX1+uueoxmsRrZcL8MNKJxiksU3M5XzxlHkE=",
-        createdAt: Date.now() - 300000 // 5 minutes ago
-    },
-    {
-        sender: "Bob",
-        cipher: "U2FsdGVkX1/53I3t9rvnpa9ZXQJr+a7hH4eQYoIDvII=",
-        createdAt: Date.now() - 240000 // 4 minutes ago
-    },
-    {
-        sender: "Charlie",
-        cipher: "U2FsdGVkX19XLmH5YqL8PxL9QGPMHJzJ5Jd6Jl8VJH8=",
-        createdAt: Date.now() - 180000 // 3 minutes ago
-    }
-];
-
 // Crypto Utilities
 const CryptoUtils = {
     encrypt(text, key) {
