@@ -7,7 +7,16 @@ const AppState = {
     socket: null,
     isConnected: false,
     messages: [],
-    processedMessageIds: new Set()
+    processedMessageIds: new Set(),
+    // Voice call state
+    isInCall: false,
+    currentCall: null,
+    localStream: null,
+    peerConnection: null,
+    isMuted: false,
+    isSpeakerOn: false,
+    callStartTime: null,
+    callTimer: null
 };
 
 // Crypto Utilities
@@ -57,6 +66,275 @@ const Validation = {
             errors.push('Secret key must be at least 3 characters');
         }
         return errors;
+    }
+};
+
+// Voice Call Manager
+const VoiceCall = {
+    // WebRTC configuration with STUN servers
+    configuration: {
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+    },
+
+    async initializeCall() {
+        try {
+            // Get user media (microphone)
+            AppState.localStream = await navigator.mediaDevices.getUserMedia({
+                audio: true,
+                video: false
+            });
+
+            // Create peer connection
+            AppState.peerConnection = new RTCPeerConnection(this.configuration);
+
+            // Add local stream to peer connection
+            AppState.localStream.getTracks().forEach(track => {
+                AppState.peerConnection.addTrack(track, AppState.localStream);
+            });
+
+            // Handle ICE candidates
+            AppState.peerConnection.onicecandidate = (event) => {
+                if (event.candidate && AppState.socket) {
+                    AppState.socket.emit('ice-candidate', {
+                        candidate: event.candidate
+                    });
+                }
+            };
+
+            // Handle remote stream
+            AppState.peerConnection.ontrack = (event) => {
+                console.log('Received remote stream');
+                this.handleRemoteStream(event.streams[0]);
+            };
+
+            // Handle connection state changes
+            AppState.peerConnection.onconnectionstatechange = () => {
+                console.log('Connection state:', AppState.peerConnection.connectionState);
+                if (AppState.peerConnection.connectionState === 'connected') {
+                    UI.updateCallStatus('Connected');
+                } else if (AppState.peerConnection.connectionState === 'disconnected') {
+                    this.endCall();
+                }
+            };
+
+            return true;
+        } catch (error) {
+            console.error('Failed to initialize call:', error);
+            UI.showError('Failed to access microphone. Please check permissions.');
+            return false;
+        }
+    },
+
+    async startCall() {
+        console.log('Starting voice call...');
+
+        if (!AppState.isConnected) {
+            UI.showError('Not connected to server. Please try again.');
+            return;
+        }
+
+        if (AppState.isInCall) {
+            this.endCall();
+            return;
+        }
+
+        const initialized = await this.initializeCall();
+        if (!initialized) return;
+
+        try {
+            // Create offer
+            const offer = await AppState.peerConnection.createOffer();
+            await AppState.peerConnection.setLocalDescription(offer);
+
+            // Send call invitation to all users
+            AppState.socket.emit('call-user', {
+                caller: AppState.currentUser,
+                offer: offer
+            });
+
+            AppState.isInCall = true;
+            AppState.callStartTime = Date.now();
+            UI.showCallDialog();
+            UI.updateCallStatus('Calling...');
+            UI.updateVoiceCallButton(true);
+
+            console.log('Call invitation sent');
+        } catch (error) {
+            console.error('Failed to start call:', error);
+            UI.showError('Failed to start call. Please try again.');
+            this.cleanup();
+        }
+    },
+
+    async acceptCall(offer) {
+        console.log('Accepting incoming call...');
+
+        const initialized = await this.initializeCall();
+        if (!initialized) return;
+
+        try {
+            // Set remote description
+            await AppState.peerConnection.setRemoteDescription(offer);
+
+            // Create answer
+            const answer = await AppState.peerConnection.createAnswer();
+            await AppState.peerConnection.setLocalDescription(answer);
+
+            // Send answer
+            AppState.socket.emit('answer-call', {
+                answerer: AppState.currentUser,
+                answer: answer
+            });
+
+            AppState.isInCall = true;
+            AppState.callStartTime = Date.now();
+            UI.hideIncomingCallDialog();
+            UI.showCallDialog();
+            UI.updateCallStatus('Connected');
+            UI.updateVoiceCallButton(true);
+            this.startCallTimer();
+
+            console.log('Call accepted and answer sent');
+        } catch (error) {
+            console.error('Failed to accept call:', error);
+            UI.showError('Failed to accept call. Please try again.');
+            this.cleanup();
+        }
+    },
+
+    async handleAnswer(answer) {
+        console.log('Received call answer');
+
+        if (!AppState.peerConnection) return;
+
+        try {
+            await AppState.peerConnection.setRemoteDescription(answer);
+            UI.updateCallStatus('Connected');
+            this.startCallTimer();
+            console.log('Call established successfully');
+        } catch (error) {
+            console.error('Failed to handle answer:', error);
+            this.endCall();
+        }
+    },
+
+    async handleIceCandidate(candidate) {
+        if (!AppState.peerConnection) return;
+
+        try {
+            await AppState.peerConnection.addIceCandidate(candidate);
+            console.log('ICE candidate added');
+        } catch (error) {
+            console.error('Failed to add ICE candidate:', error);
+        }
+    },
+
+    handleRemoteStream(stream) {
+        // Create audio element for remote stream
+        let remoteAudio = document.getElementById('remoteAudio');
+        if (!remoteAudio) {
+            remoteAudio = document.createElement('audio');
+            remoteAudio.id = 'remoteAudio';
+            remoteAudio.autoplay = true;
+            document.body.appendChild(remoteAudio);
+        }
+        remoteAudio.srcObject = stream;
+    },
+
+    toggleMute() {
+        if (!AppState.localStream) return;
+
+        AppState.isMuted = !AppState.isMuted;
+        AppState.localStream.getAudioTracks().forEach(track => {
+            track.enabled = !AppState.isMuted;
+        });
+
+        UI.updateMuteButton(AppState.isMuted);
+        console.log('Microphone', AppState.isMuted ? 'muted' : 'unmuted');
+    },
+
+    toggleSpeaker() {
+        AppState.isSpeakerOn = !AppState.isSpeakerOn;
+        UI.updateSpeakerButton(AppState.isSpeakerOn);
+
+        // Note: Speaker control is limited in web browsers
+        // This is more of a visual indicator
+        console.log('Speaker', AppState.isSpeakerOn ? 'on' : 'off');
+    },
+
+    declineCall() {
+        console.log('Declining call');
+        AppState.socket.emit('decline-call', {
+            decliner: AppState.currentUser
+        });
+        UI.hideIncomingCallDialog();
+    },
+
+    endCall() {
+        console.log('Ending call');
+
+        if (AppState.isInCall) {
+            AppState.socket.emit('end-call', {
+                ender: AppState.currentUser
+            });
+        }
+
+        this.cleanup();
+        UI.hideCallDialog();
+        UI.updateVoiceCallButton(false);
+
+        if (AppState.callTimer) {
+            clearInterval(AppState.callTimer);
+            AppState.callTimer = null;
+        }
+    },
+
+    cleanup() {
+        // Stop local stream
+        if (AppState.localStream) {
+            AppState.localStream.getTracks().forEach(track => track.stop());
+            AppState.localStream = null;
+        }
+
+        // Close peer connection
+        if (AppState.peerConnection) {
+            AppState.peerConnection.close();
+            AppState.peerConnection = null;
+        }
+
+        // Remove remote audio element
+        const remoteAudio = document.getElementById('remoteAudio');
+        if (remoteAudio) {
+            remoteAudio.remove();
+        }
+
+        AppState.isInCall = false;
+        AppState.isMuted = false;
+        AppState.isSpeakerOn = false;
+        AppState.callStartTime = null;
+    },
+
+    startCallTimer() {
+        if (AppState.callTimer) {
+            clearInterval(AppState.callTimer);
+        }
+
+        AppState.callTimer = setInterval(() => {
+            if (AppState.callStartTime) {
+                const duration = Date.now() - AppState.callStartTime;
+                UI.updateCallDuration(duration);
+            }
+        }, 1000);
+    },
+
+    formatDuration(milliseconds) {
+        const seconds = Math.floor(milliseconds / 1000);
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+        return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
     }
 };
 
@@ -119,6 +397,48 @@ const SocketManager = {
 
                 AppState.socket.on('message', (data) => {
                     MessageHandler.handleIncomingMessage(data);
+                });
+
+                // Voice call event handlers
+                AppState.socket.on('incoming-call', (data) => {
+                    console.log('Incoming call from:', data.caller);
+                    UI.showIncomingCallDialog(data.caller, data.offer);
+                });
+
+                AppState.socket.on('call-answered', (data) => {
+                    console.log('Call answered by:', data.answerer);
+                    VoiceCall.handleAnswer(data.answer);
+                });
+
+                AppState.socket.on('call-declined', (data) => {
+                    console.log('Call declined by:', data.decliner);
+                    UI.showError(`Call declined by ${data.decliner}`);
+                    VoiceCall.cleanup();
+                    UI.hideCallDialog();
+                    UI.updateVoiceCallButton(false);
+                });
+
+                AppState.socket.on('call-ended', (data) => {
+                    console.log('Call ended by:', data.ender);
+                    VoiceCall.cleanup();
+                    UI.hideCallDialog();
+                    UI.updateVoiceCallButton(false);
+                    if (data.ender !== AppState.currentUser) {
+                        UI.showError(`Call ended by ${data.ender}`);
+                    }
+                });
+
+                AppState.socket.on('ice-candidate', (data) => {
+                    console.log('Received ICE candidate');
+                    VoiceCall.handleIceCandidate(data.candidate);
+                });
+
+                AppState.socket.on('user-left-call', (data) => {
+                    console.log('User left call:', data.userId);
+                    if (AppState.isInCall) {
+                        VoiceCall.endCall();
+                        UI.showError('Other participant left the call');
+                    }
                 });
 
                 // Set connecting status initially
@@ -312,7 +632,22 @@ const UI = {
             changeKeyBtn: document.getElementById('changeKeyBtn'),
             logoutBtn: document.getElementById('logoutBtn'),
             skipKeyBtn: document.getElementById('skipKeyBtn'),
-            setKeyBtn: document.getElementById('setKeyBtn')
+            setKeyBtn: document.getElementById('setKeyBtn'),
+            // Voice call elements
+            voiceCallBtn: document.getElementById('voiceCallBtn'),
+            voiceCallDialog: document.getElementById('voiceCallDialog'),
+            incomingCallDialog: document.getElementById('incomingCallDialog'),
+            callTitle: document.getElementById('callTitle'),
+            callStatus: document.getElementById('callStatus'),
+            callParticipants: document.getElementById('callParticipants'),
+            callDuration: document.getElementById('callDuration'),
+            participantsCount: document.getElementById('participantsCount'),
+            muteBtn: document.getElementById('muteBtn'),
+            endCallBtn: document.getElementById('endCallBtn'),
+            speakerBtn: document.getElementById('speakerBtn'),
+            callerName: document.getElementById('callerName'),
+            acceptCallBtn: document.getElementById('acceptCallBtn'),
+            declineCallBtn: document.getElementById('declineCallBtn')
         };
 
         // Log missing elements
@@ -401,6 +736,55 @@ const UI = {
                 console.log('Send button clicked');
                 e.preventDefault();
                 this.handleSendMessage();
+            });
+        }
+
+        // Voice call button
+        if (this.elements.voiceCallBtn) {
+            this.elements.voiceCallBtn.addEventListener('click', (e) => {
+                console.log('Voice call button clicked');
+                e.preventDefault();
+                VoiceCall.startCall();
+            });
+        }
+
+        // Call control buttons
+        if (this.elements.muteBtn) {
+            this.elements.muteBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                VoiceCall.toggleMute();
+            });
+        }
+
+        if (this.elements.endCallBtn) {
+            this.elements.endCallBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                VoiceCall.endCall();
+            });
+        }
+
+        if (this.elements.speakerBtn) {
+            this.elements.speakerBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                VoiceCall.toggleSpeaker();
+            });
+        }
+
+        // Incoming call buttons
+        if (this.elements.acceptCallBtn) {
+            this.elements.acceptCallBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const offer = this.elements.acceptCallBtn.dataset.offer;
+                if (offer) {
+                    VoiceCall.acceptCall(JSON.parse(offer));
+                }
+            });
+        }
+
+        if (this.elements.declineCallBtn) {
+            this.elements.declineCallBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                VoiceCall.declineCall();
             });
         }
     },
@@ -676,6 +1060,125 @@ const UI = {
         }
 
         this.showUserSetupDialog();
+    },
+
+    // Voice Call UI Methods
+    showCallDialog() {
+        if (this.elements.voiceCallDialog) {
+            this.elements.voiceCallDialog.classList.remove('hidden');
+            this.updateParticipantsList();
+        }
+    },
+
+    hideCallDialog() {
+        if (this.elements.voiceCallDialog) {
+            this.elements.voiceCallDialog.classList.add('hidden');
+        }
+    },
+
+    showIncomingCallDialog(callerName, offer) {
+        if (this.elements.incomingCallDialog && this.elements.callerName) {
+            this.elements.callerName.textContent = callerName;
+            this.elements.acceptCallBtn.dataset.offer = JSON.stringify(offer);
+            this.elements.incomingCallDialog.classList.remove('hidden');
+        }
+    },
+
+    hideIncomingCallDialog() {
+        if (this.elements.incomingCallDialog) {
+            this.elements.incomingCallDialog.classList.add('hidden');
+        }
+    },
+
+    updateCallStatus(status) {
+        if (this.elements.callStatus) {
+            this.elements.callStatus.textContent = status;
+        }
+    },
+
+    updateCallDuration(milliseconds) {
+        if (this.elements.callDuration) {
+            const duration = VoiceCall.formatDuration(milliseconds);
+            this.elements.callDuration.textContent = duration;
+        }
+    },
+
+    updateParticipantsList() {
+        if (!this.elements.callParticipants) return;
+
+        // Clear existing participants
+        this.elements.callParticipants.innerHTML = '';
+
+        // Add current user
+        const userParticipant = this.createParticipantElement(
+            AppState.currentUser,
+            'You',
+            AppState.isMuted
+        );
+        this.elements.callParticipants.appendChild(userParticipant);
+
+        // Update participants count
+        if (this.elements.participantsCount) {
+            const count = AppState.isInCall ? 2 : 1; // Assuming 1-on-1 calls for now
+            this.elements.participantsCount.textContent = `${count} participant${count > 1 ? 's' : ''}`;
+        }
+    },
+
+    createParticipantElement(name, status, isMuted) {
+        const div = document.createElement('div');
+        div.className = 'participant';
+
+        const avatarLetter = name.charAt(0).toUpperCase();
+
+        div.innerHTML = `
+            <div class="participant-avatar">${this.escapeHtml(avatarLetter)}</div>
+            <div class="participant-info">
+                <div class="participant-name">${this.escapeHtml(name)}</div>
+                <div class="participant-status">${this.escapeHtml(status)}</div>
+            </div>
+            <div class="participant-audio">
+                <div class="audio-indicator ${isMuted ? 'muted' : ''}"></div>
+            </div>
+        `;
+
+        return div;
+    },
+
+    updateMuteButton(isMuted) {
+        if (this.elements.muteBtn) {
+            const icon = this.elements.muteBtn.querySelector('.material-icons');
+            if (icon) {
+                icon.textContent = isMuted ? 'mic_off' : 'mic';
+            }
+            this.elements.muteBtn.classList.toggle('muted', isMuted);
+        }
+        this.updateParticipantsList();
+    },
+
+    updateSpeakerButton(isSpeakerOn) {
+        if (this.elements.speakerBtn) {
+            const icon = this.elements.speakerBtn.querySelector('.material-icons');
+            if (icon) {
+                icon.textContent = isSpeakerOn ? 'volume_up' : 'volume_down';
+            }
+            this.elements.speakerBtn.classList.toggle('active', isSpeakerOn);
+        }
+    },
+
+    updateVoiceCallButton(isInCall) {
+        if (this.elements.voiceCallBtn) {
+            const icon = this.elements.voiceCallBtn.querySelector('.material-icons');
+            const text = this.elements.voiceCallBtn.querySelector('span:not(.material-icons)');
+
+            if (icon) {
+                icon.textContent = isInCall ? 'call_end' : 'call';
+            }
+            if (text) {
+                text.textContent = isInCall ? 'End' : 'Call';
+            }
+
+            this.elements.voiceCallBtn.classList.toggle('calling', isInCall);
+        }
     },
 
     showError(message) {

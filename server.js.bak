@@ -1,49 +1,15 @@
-const express = require('express');
-const http = require('http');
-const socketIo = require('socket.io');
-const path = require('path');
-
-const app = express();
-const server = http.createServer(app);
-
-// Configure Socket.IO with better settings for Vercel
-const io = socketIo(server, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"],
-        credentials: true
-    },
-    transports: ['websocket', 'polling'],
-    allowEIO3: true,
-    pingTimeout: 60000,
-    pingInterval: 25000
-});
-
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Handle root route
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-io.on('connection', (socket) => {
+const express = require('expio.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
-    // Chat message handling
     socket.on('message', (data) => {
         console.log('Message received from', socket.id, '- Sender:', data.sender, '- Message ID:', data.id);
         socket.broadcast.emit('message', data);
         console.log('Message broadcasted to', socket.adapter.rooms.size - 1, 'other clients');
     });
 
-    // Voice call signaling events
+    // Voice call signaling
     socket.on('call-user', (data) => {
-        console.log('Call initiated by', data.caller, 'to all users');
+        console.log('Call initiated by', data.caller, 'to', data.target);
         socket.broadcast.emit('incoming-call', {
             caller: data.caller,
             callerId: socket.id,
@@ -87,6 +53,45 @@ io.on('connection', (socket) => {
         socket.broadcast.emit('user-left-call', {
             userId: socket.id
         });
+    });
+}); http = require('http');
+const socketIo = require('socket.io');
+const path = require('path');
+
+const app = express();
+const server = http.createServer(app);
+
+// Configure Socket.IO with better settings for Vercel
+const io = socketIo(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"],
+        credentials: true
+    },
+    transports: ['websocket', 'polling'],
+    allowEIO3: true,
+    pingTimeout: 60000,
+    pingInterval: 25000
+});
+
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Handle root route
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+io.on('connection', (socket) => {
+    console.log('User connected:', socket.id, 'at', new Date().toISOString());
+
+    socket.on('message', (data) => {
+        console.log('Message received from', socket.id, '- Sender:', data.sender, '- Message ID:', data.id);
+        socket.broadcast.emit('message', data);
+        console.log('Message broadcasted to', socket.adapter.rooms.size - 1, 'other clients');
+    });
+
+    socket.on('disconnect', () => {
+        console.log('User disconnected:', socket.id);
     });
 });
 

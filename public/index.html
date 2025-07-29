@@ -57,6 +57,10 @@
                     </div>
                 </div>
                 <div class="header-actions">
+                    <button id="voiceCallBtn" class="btn btn--outline btn--sm" title="Start Voice Call">
+                        <span class="material-icons">call</span>
+                        Call
+                    </button>
                     <button id="changeKeyBtn" class="btn btn--outline btn--sm">
                         <span class="material-icons">vpn_key</span>
                         Key
@@ -94,6 +98,61 @@
                 <span class="material-icons">lock</span>
                 <span id="keyStatusText">No decryption key set - messages will appear encrypted</span>
                 <button id="setKeyBtn" class="btn btn--sm btn--primary">Set Key</button>
+            </div>
+        </div>
+
+        <!-- Voice Call Dialog -->
+        <div id="voiceCallDialog" class="modal hidden">
+            <div class="modal-content voice-call-modal">
+                <div class="call-header">
+                    <h3 id="callTitle">Voice Call</h3>
+                    <div class="call-status" id="callStatus">Initializing...</div>
+                </div>
+
+                <div class="call-participants" id="callParticipants">
+                    <!-- Participants will be added here -->
+                </div>
+
+                <div class="call-controls">
+                    <button id="muteBtn" class="call-btn mute-btn" title="Mute/Unmute">
+                        <span class="material-icons">mic</span>
+                    </button>
+                    <button id="endCallBtn" class="call-btn end-call-btn" title="End Call">
+                        <span class="material-icons">call_end</span>
+                    </button>
+                    <button id="speakerBtn" class="call-btn speaker-btn" title="Speaker On/Off">
+                        <span class="material-icons">volume_up</span>
+                    </button>
+                </div>
+
+                <div class="call-info">
+                    <div class="call-duration" id="callDuration">00:00</div>
+                    <div class="participants-count" id="participantsCount">0 participants</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Incoming Call Dialog -->
+        <div id="incomingCallDialog" class="modal hidden">
+            <div class="modal-content incoming-call-modal">
+                <div class="incoming-call-info">
+                    <h3>Incoming Voice Call</h3>
+                    <div class="caller-name" id="callerName">Unknown</div>
+                    <div class="call-animation">
+                        <div class="pulse-ring"></div>
+                        <div class="pulse-ring pulse-ring-delay"></div>
+                        <span class="material-icons call-icon">call</span>
+                    </div>
+                </div>
+
+                <div class="incoming-call-controls">
+                    <button id="declineCallBtn" class="call-btn decline-btn" title="Decline">
+                        <span class="material-icons">call_end</span>
+                    </button>
+                    <button id="acceptCallBtn" class="call-btn accept-btn" title="Accept">
+                        <span class="material-icons">call</span>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
